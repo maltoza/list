@@ -1,0 +1,22 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "(g++) построение main.cpp",
+            "type": "shell",
+            "command": "g++.exe",
+            "args": [
+                "-g",// компиляция с отладочной информацией
+                "${workspaceFolder}/main.cpp",
+                "./list.cpp",
+                "-o",
+                "${workspaceFolder}/main.exe"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$gcc"
+        }
+    ]
+}
