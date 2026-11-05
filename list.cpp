@@ -1,14 +1,80 @@
 #include "list.h"
 
 #define RETURN_ERROR(err_code) do {                                               \
-    printf("%s error (%d) %s:%d\n", __FILE__, err_code, __FUNCTION__,  __LINE__); \
+    printf("%s:%d error (%d) %s\n", __FILE__, err_code, __FUNCTION__,  __LINE__); \
     return err_code;                                                              \
 } while (0)
 
+#ifdef LIST_DEBUG
+    #define LIST_ASSERT(lst_ptr) lst_assert((lst_ptr), __FILE__, __FUNCTION__, __LINE__)
+#else
+    #define LIST_ASSERT(lst_ptr)  
+#endif
+
 const node poison_node = {.prev_mass = 123456789, .value = 123456789, .next_mass = 123456789};
 
+void lst_assert(list_info* const lst, const char* file_name, const char* func_name, const int line);
+LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char* func_name, const int line);
+void lst_dump(list_info* const lst, const LIST_MESS result);
+
+LIST_MESS find_free(list_info* const lst);
 LIST_MESS fill_poison(list_info* list);
 LIST_MESS get_ind_mass(list_info* lst, size_t ind_lst, size_t* ind_mass_prev, size_t* ind_mass_next);
+
+// assert списка
+void lst_assert(list_info* const lst, const char* file_name, const char* func_name, const int line) {
+    LIST_MESS result = lst_verificate(lst, file_name, func_name, line);
+    lst_dump(lst, result);
+    assert(result == LIST_MESS_OK);
+}
+
+
+// проверка стека
+LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char* func_name, const int line) {
+    if (lst == NULL) RETURN_ERROR(LST_MESS_NULLPTR);
+
+    return LIST_MESS_OK;
+}
+
+
+// вывод информации в файл
+void lst_dump(list_info* const lst, const LIST_MESS result)
+{
+    char filename_html[LINE_LEN] = FILENAME_HTML;
+    char filename_png[LINE_LEN];
+    
+    FILE* log_html = fopen(filename_html, "a+");
+
+    fprintf(log_html, "<pre>\n");
+    fprintf (log_html, "======================================\n");
+    if (result == LIST_MESS_OK)
+    {
+        fprintf (log_html, "            VERIFICATE OK\n");       
+    }
+    else
+    {
+        fprintf (log_html, "            VERIFICATE ERROR\n");
+    }
+    fprintf (log_html, "======================================\n");
+    fprintf (log_html, "            INFORMATION:\n");
+    fprintf (log_html, "File name:     %s\n", (*lst).error.file);
+    fprintf (log_html, "Function name: %s\n", (*lst).error.func);
+    fprintf (log_html, "Line number:   %d\n", (*lst).error.line);
+    fprintf (log_html, "---------------------------------------\n");
+    fprintf (log_html, "    num_elems: %d\n", (*lst).num_elems);
+    fprintf (log_html, "    capacity:  %d\n", (*lst).capacity);
+    fprintf (log_html, "    buffer:  %p\n", (*lst).buffer);
+    fprintf (log_html, "---------------------------------------\n");
+
+    list_get_graph(lst, filename_png);
+    fprintf (log_html, "<img src=\"%s\" alt=\"%s\">\n", filename_png, filename_png);
+
+    fprintf (log_html, "======================================\n\n\n");
+    fprintf(log_html, "</pre>");
+    fclose(log_html);
+    return;
+}
+
 
 // создание списка
 LIST_MESS list_ctor(list_info* list, const size_t capacity) {
@@ -25,7 +91,7 @@ LIST_MESS list_ctor(list_info* list, const size_t capacity) {
 
 // заполнение ядовитыми значениями
 LIST_MESS fill_poison(list_info* list) {
-    for (int i = 0; i <= list->capacity; i++) {
+    for (int i = 1; i <= list->capacity; i++) {
         list->buffer[i] = poison_node;
     }
 
@@ -42,6 +108,32 @@ LIST_MESS list_dtor(list_info* list) {
 
     return LIST_MESS_OK;
 }
+
+// удаление элемента
+LIST_MESS list_del(list_info* lst, size_t ind_lst) {
+    assert(lst != NULL);
+    size_t ind_mass_prev;
+    size_t ind_mass;
+
+//TODO if ind_lst > num_elem
+
+    get_ind_mass(lst, ind_lst, &ind_mass_prev, &ind_mass);
+    // корректировка предыдущего элемента
+    lst->buffer[lst->buffer[ind_mass].prev_mass].next_mass = lst->buffer[ind_mass].next_mass;
+    // корректировка следующего элемента
+    lst->buffer[lst->buffer[ind_mass].next_mass].prev_mass = lst->buffer[ind_mass].prev_mass;
+    // удаление текущего элемента
+    lst->buffer[ind_mass] = poison_node;
+
+    //поиск первого свободного элемента
+    find_free(lst);
+    lst->num_elems -= 1;
+
+    LIST_ASSERT(lst);
+
+    return LIST_MESS_OK;
+}
+
 
 // вставка элемента
 LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
@@ -62,6 +154,7 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
         lst->buffer[0].next_mass = lst->ind_mass_free;
         lst->ind_mass_free = 2;
     } else {
+        if (ind_lst > lst->num_elems + 1) ind_lst = lst->num_elems + 1;
         size_t ind_mass_prev;
         size_t ind_mass_next;
         get_ind_mass(lst, ind_lst, &ind_mass_prev, &ind_mass_next);
@@ -77,16 +170,27 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
 
     }
 
-    // получение индекса нового свободного элемента в массиве
+    //поиск первого свободного элемента
+    find_free(lst);
+    lst->num_elems += 1;
+
+
+    LIST_ASSERT(lst);
+
+    return LIST_MESS_OK;
+}
+
+// поиск индекса нового свободного элемента в массиве
+LIST_MESS find_free(list_info* const lst) {
     size_t ind_mass = 0;
     while (lst->buffer[ind_mass].value != poison_node.value) {
         ind_mass++;
     }
     lst->ind_mass_free = ind_mass;
-    lst->num_elems += 1;
 
     return LIST_MESS_OK;
 }
+
 
 LIST_MESS get_ind_mass(list_info* lst, size_t ind_lst, size_t* ind_mass_prev, size_t* ind_mass_next) {
     assert(lst != NULL);
@@ -103,3 +207,58 @@ LIST_MESS get_ind_mass(list_info* lst, size_t ind_lst, size_t* ind_mass_prev, si
     return LIST_MESS_OK;
 }
 
+LIST_MESS list_get_graph(list_info* lst, char* filename_png) {
+    FILE* file_gv;
+    char filename_gv[LINE_LEN] = "./Graphviz/";
+    time_t time_now;
+    struct tm time_info;
+    char time_str[LINE_LEN];
+
+    time(&time_now);
+    localtime_s(&time_info, &time_now);
+    size_t res = strftime(time_str, LINE_LEN, "%Y%m%d_%H%M%S", &time_info);
+    if (res == 0) RETURN_ERROR(LIST_MESS_GET_TIME);
+    strcat_s(filename_gv, time_str);
+    strcat_s(filename_gv, ".gv");
+
+    strcpy_s(filename_png, LINE_LEN, "./Graphviz/");
+    strcat_s(filename_png, LINE_LEN, time_str);
+    strcat_s(filename_png, LINE_LEN, ".png");
+
+    mkdir("Graphviz");
+    // построение описание графа для graphviz
+    fopen_s(&file_gv, filename_gv, "w");
+    fprintf(file_gv, "digraph G {\n");
+    fprintf(file_gv, "node [shape=box, style=filled, fillcolor=lightblue, fontname=\"Arial\"];\n");
+    fprintf(file_gv, "edge [color=black, fontname=\"Arial\", fontsize=10];\n");
+
+    size_t ind_lst_temp = 0;
+    size_t ind_mass_temp = 0;
+    while (ind_lst_temp <= (*lst).num_elems) {
+        if (ind_lst_temp == 0) fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+                                        ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "green");
+        else {
+            fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+                                        ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "gray");
+            fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, ind_lst_temp);
+        }
+        ind_mass_temp = (*lst).buffer[ind_mass_temp].next_mass;
+        ind_lst_temp++;
+    }
+
+    fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+                                        ind_lst_temp, (*lst).buffer[(*lst).ind_mass_free].value, (*lst).ind_mass_free, "red");
+    fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, ind_lst_temp);
+
+    fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, 0);
+    fprintf(file_gv, "}\n");
+
+    fclose(file_gv);
+
+    // преобразование описания графа в картинку
+    char cmd[LINE_LEN];
+    sprintf(cmd, "dot -Tpng %s -o %s", filename_gv, filename_png);
+    system(cmd);
+
+    return LIST_MESS_OK;
+} 

@@ -7,6 +7,7 @@
             "command": "g++.exe",
             "args": [
                 "-g",// компиляция с отладочной информацией
+                "-DLIST_DEBUG",
                 "${workspaceFolder}/main.cpp",
                 "./list.cpp",
                 "-o",
