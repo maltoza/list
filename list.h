@@ -13,11 +13,11 @@
 
 enum LIST_MESS {
     LIST_MESS_OK = 0,
-
-    LIST_MESS_MEM_ALLOC = 10,
+    LIST_MESS_MEM_ALLOC,
     LST_MESS_NULLPTR,
-
-    LIST_MESS_GET_TIME = 20
+    LIST_MESS_GET_TIME,
+    LST_MESS_INCORR_IND,
+    LIST_MESS_ERROR_LEN
 };
 
 typedef int node_elem_t;
