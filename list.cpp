@@ -100,6 +100,10 @@ LIST_MESS list_ctor(list_info* list, const size_t capacity) {
     list->num_elems = 0;
     list->ind_mass_free  = 1;
     list->buffer[0].value = 0;
+    list->buffer[0].prev_mass = 0;
+    list->buffer[0].next_mass = 0;
+
+    LIST_ASSERT(list);
 
     return LIST_MESS_OK;
 }
