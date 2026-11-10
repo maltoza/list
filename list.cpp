@@ -17,8 +17,8 @@ void lst_assert(list_info* const lst, const char* file_name, const char* func_na
 LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char* func_name, const int line);
 void lst_dump(list_info* const lst, const LIST_MESS result);
 
-LIST_MESS find_free(list_info* const lst);
-LIST_MESS fill_poison(list_info* list);
+LIST_MESS get_free(list_info* const lst);
+LIST_MESS fill_poison(list_info* list, size_t id_start);
 LIST_MESS get_ind_mass(list_info* lst, size_t ind_lst, size_t* ind_mass_prev, size_t* ind_mass_next);
 
 // assert списка
@@ -31,7 +31,7 @@ void lst_assert(list_info* const lst, const char* file_name, const char* func_na
 
 // проверка списка
 LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char* func_name, const int line) {
-    if (lst == NULL) RETURN_ERROR(LST_MESS_NULLPTR);
+    if (lst == NULL) RETURN_ERROR(LIST_MESS_NULLPTR);
     else {
         lst->error.file = file_name;
         lst->error.func = func_name;
@@ -39,8 +39,8 @@ LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char
     }
 
     size_t ind_mass_next = 0;
-    for (int i = 0; i <= lst->num_elems; i++) {
-        if (ind_mass_next > lst->capacity) RETURN_ERROR(LIST_MESS_ERROR_LEN);
+    for (int i = 0; i < lst->num_elems; i++) {
+        if (ind_mass_next >= lst->capacity) RETURN_ERROR(LIST_MESS_ERROR_LEN);
         ind_mass_next = lst->buffer[ind_mass_next].next_mass;
     }
     if (ind_mass_next != 0) RETURN_ERROR(LIST_MESS_ERROR_LEN);
@@ -94,14 +94,14 @@ LIST_MESS list_ctor(list_info* list, const size_t capacity) {
     system("del /Q Graphviz\\*.png");
 
     list->capacity = capacity;
-    list->buffer   = (node*)malloc((list->capacity + 1) * sizeof(node));
+    list->buffer   = (node*)malloc(list->capacity * sizeof(node));
     if (list->buffer == NULL) RETURN_ERROR(LIST_MESS_MEM_ALLOC);
-    fill_poison(list);
-    list->num_elems = 0;
-    list->ind_mass_free  = 1;
+    fill_poison(list, 0);
     list->buffer[0].value = 0;
     list->buffer[0].prev_mass = 0;
     list->buffer[0].next_mass = 0;
+    list->num_elems = 1;
+    list->ind_mass_free  = 1;
 
     LIST_ASSERT(list);
 
@@ -109,8 +109,8 @@ LIST_MESS list_ctor(list_info* list, const size_t capacity) {
 }
 
 // заполнение ядовитыми значениями
-LIST_MESS fill_poison(list_info* list) {
-    for (int i = 1; i <= list->capacity; i++) {
+LIST_MESS fill_poison(list_info* list, size_t id_start) {
+    for (int i = id_start; i < list->capacity; i++) {
         list->buffer[i] = poison_node;
     }
 
@@ -133,20 +133,21 @@ LIST_MESS list_del(list_info* lst, size_t ind_lst) {
     assert(lst != NULL);
     size_t ind_mass_prev;
     size_t ind_mass;
+    if (ind_lst > 0) {
+        if (ind_lst > lst->num_elems) RETURN_ERROR(LIST_MESS_INCORR_IND);
 
-    if (ind_lst > lst->num_elems) RETURN_ERROR(LST_MESS_INCORR_IND);
+        get_ind_mass(lst, ind_lst, &ind_mass_prev, &ind_mass);
+        // корректировка предыдущего элемента
+        lst->buffer[lst->buffer[ind_mass].prev_mass].next_mass = lst->buffer[ind_mass].next_mass;
+        // корректировка следующего элемента
+        lst->buffer[lst->buffer[ind_mass].next_mass].prev_mass = lst->buffer[ind_mass].prev_mass;
+        // удаление текущего элемента
+        lst->buffer[ind_mass] = poison_node;
 
-    get_ind_mass(lst, ind_lst, &ind_mass_prev, &ind_mass);
-    // корректировка предыдущего элемента
-    lst->buffer[lst->buffer[ind_mass].prev_mass].next_mass = lst->buffer[ind_mass].next_mass;
-    // корректировка следующего элемента
-    lst->buffer[lst->buffer[ind_mass].next_mass].prev_mass = lst->buffer[ind_mass].prev_mass;
-    // удаление текущего элемента
-    lst->buffer[ind_mass] = poison_node;
-
-    //поиск первого свободного элемента
-    find_free(lst);
-    lst->num_elems -= 1;
+        //поиск первого свободного элемента
+        get_free(lst);
+        lst->num_elems -= 1;
+    }
 
     LIST_ASSERT(lst);
 
@@ -160,14 +161,7 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
     LIST_MESS res;
     size_t ind_mass_prev;
     size_t ind_mass_next;
-    if (lst->capacity == lst->num_elems) {
-        node* temp = (node*)realloc(lst->buffer, 2 * lst->capacity * sizeof(node));
-        if (temp == NULL) RETURN_ERROR(LIST_MESS_MEM_ALLOC);
-        lst->buffer = temp;
-        lst->capacity = 2 * lst->capacity;
-        lst->ind_mass_free = lst->num_elems;
-    }
-
+    
     if (lst->num_elems == 0) {
         lst->buffer[lst->ind_mass_free].value = val;
         lst->buffer[lst->ind_mass_free].next_mass = 0;
@@ -196,8 +190,8 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
 
 
     //поиск первого свободного элемента
-    find_free(lst);
     lst->num_elems += 1;
+    get_free(lst);
 
     LIST_ASSERT(lst);
 
@@ -205,12 +199,25 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
 }
 
 // поиск индекса нового свободного элемента в массиве
-LIST_MESS find_free(list_info* const lst) {
-    size_t ind_mass = 0;
-    while (lst->buffer[ind_mass].value != poison_node.value) {
-        ind_mass++;
+LIST_MESS get_free(list_info* const lst) {
+    lst->ind_mass_free = poison_node.prev_mass;
+    if (lst->capacity == lst->num_elems) {
+        node* temp = (node*)realloc(lst->buffer, 2 * lst->capacity * sizeof(node));
+        if (temp == NULL) RETURN_ERROR(LIST_MESS_MEM_ALLOC);
+        lst->buffer = temp;
+        lst->capacity = 2 * lst->capacity;
+        lst->ind_mass_free = lst->num_elems;
+        fill_poison(lst, lst->ind_mass_free);
+    } else {
+        for (size_t i = 1; i < lst->capacity; i++) {
+            if (lst->buffer[i].value == poison_node.value) {
+                lst->ind_mass_free = i;
+                break;
+            }
+        }
     }
-    lst->ind_mass_free = ind_mass;
+
+    if (lst->ind_mass_free == poison_node.prev_mass) RETURN_ERROR(LIST_MESS_INCORR_IND);
 
     return LIST_MESS_OK;
 }
@@ -268,8 +275,8 @@ LIST_MESS list_get_graph(list_info* lst, char* filename_png) {
 
     size_t ind_lst_temp = 0;
     size_t ind_mass_temp = 0;
-    while (ind_lst_temp <= (*lst).num_elems) {
-        if (ind_lst_temp == 0) fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+    while (ind_lst_temp < (*lst).num_elems) {
+        if (ind_lst_temp == 0) fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
                                         ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "green");
         else {
             if (ind_mass_temp > lst->capacity) {
@@ -281,19 +288,19 @@ LIST_MESS list_get_graph(list_info* lst, char* filename_png) {
                 RETURN_ERROR(LIST_MESS_ERROR_LEN);
             }
 
-            fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+            fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
                                         ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "gray");
-            fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, ind_lst_temp);
+            fprintf(file_gv, "node%zu -> node%zu;\n", ind_lst_temp - 1, ind_lst_temp);
         }
         ind_mass_temp = (*lst).buffer[ind_mass_temp].next_mass;
         ind_lst_temp++;
     }
 
-    fprintf(file_gv, "node%d [label=\"%d [%d]\", fillcolor=\"%s\"];\n",
+    fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
                                         ind_lst_temp, (*lst).buffer[(*lst).ind_mass_free].value, (*lst).ind_mass_free, "red");
     //fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, ind_lst_temp);
 
-    fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, 0);
+    fprintf(file_gv, "node%zu -> node%zu;\n", ind_lst_temp - 1, 0);
     fprintf(file_gv, "}\n");
 
     fclose(file_gv);

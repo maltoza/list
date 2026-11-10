@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
 
     list_info lst = {};
     char filename_png[LINE_LEN];
-    list_ctor(&lst, 10);
+    list_ctor(&lst, 2);
     //list_get_graph(&lst, filename_png);    
     list_insert(&lst, 1, 5);
     //list_get_graph(&lst, filename_png);   
