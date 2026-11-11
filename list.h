@@ -9,7 +9,7 @@
 #include <dir.h>
 
 #define FILENAME_HTML "./log.html"
-#define LINE_LEN 100
+#define LINE_LEN 50
 
 enum LIST_MESS {
     LIST_MESS_OK = 0,
@@ -32,7 +32,7 @@ struct list_err_t
 // один элемент
 struct node {
     size_t prev_mass;        // индекс предыдущего элемента
-    node_elem_t value;  // значение текущего элемента
+    node_elem_t value;       // значение текущего элемента
     size_t next_mass;        // индекс следующего элемента
 };
 

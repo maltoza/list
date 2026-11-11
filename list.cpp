@@ -39,7 +39,7 @@ LIST_MESS lst_verificate(list_info* const lst, const char* file_name, const char
     }
 
     size_t ind_mass_next = 0;
-    for (int i = 0; i < lst->num_elems; i++) {
+    for (size_t i = 0; i < lst->num_elems; i++) {
         if (ind_mass_next >= lst->capacity) RETURN_ERROR(LIST_MESS_ERROR_LEN);
         ind_mass_next = lst->buffer[ind_mass_next].next_mass;
     }
@@ -73,8 +73,8 @@ void lst_dump(list_info* const lst, const LIST_MESS result)
     fprintf (log_html, "Function name: %s\n", lst->error.func);
     fprintf (log_html, "Line number:   %d\n", lst->error.line);
     fprintf (log_html, "---------------------------------------\n");
-    fprintf (log_html, "    num_elems: %d\n", lst->num_elems);
-    fprintf (log_html, "    capacity:  %d\n", lst->capacity);
+    fprintf (log_html, "    num_elems: %zu\n", lst->num_elems);
+    fprintf (log_html, "    capacity:  %zu\n", lst->capacity);
     fprintf (log_html, "    buffer:  %p\n", lst->buffer);
     fprintf (log_html, "---------------------------------------\n");
 
@@ -91,7 +91,7 @@ void lst_dump(list_info* const lst, const LIST_MESS result)
 // создание списка
 LIST_MESS list_ctor(list_info* list, const size_t capacity) {
     system("del /Q Graphviz\\*.gv");
-    system("del /Q Graphviz\\*.png");
+    system("del /Q Graphviz\\*.svg");
 
     list->capacity = capacity;
     list->buffer   = (node*)malloc(list->capacity * sizeof(node));
@@ -110,7 +110,7 @@ LIST_MESS list_ctor(list_info* list, const size_t capacity) {
 
 // заполнение ядовитыми значениями
 LIST_MESS fill_poison(list_info* list, size_t id_start) {
-    for (int i = id_start; i < list->capacity; i++) {
+    for (size_t i = id_start; i < list->capacity; i++) {
         list->buffer[i] = poison_node;
     }
 
@@ -162,7 +162,7 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
     size_t ind_mass_prev;
     size_t ind_mass_next;
     
-    if (lst->num_elems == 0) {
+    if (lst->num_elems == 1) {
         lst->buffer[lst->ind_mass_free].value = val;
         lst->buffer[lst->ind_mass_free].next_mass = 0;
         lst->buffer[lst->ind_mass_free].prev_mass = 0;
@@ -181,9 +181,11 @@ LIST_MESS list_insert(list_info* lst, size_t ind_lst, node_elem_t val) {
         // изменение предыдущего элемента
         lst->buffer[ind_mass_prev].next_mass = lst->ind_mass_free;
         // формирование некорректного узла
+        /*
         if (ind_lst == 4) {
             lst->buffer[ind_mass_prev].next_mass = 90;
         }
+        */
         // изменение следующего элемента
         lst->buffer[ind_mass_next].prev_mass = lst->ind_mass_free;
     }
@@ -264,49 +266,111 @@ LIST_MESS list_get_graph(list_info* lst, char* filename_png) {
 
     strcpy_s(filename_png, LINE_LEN, "./Graphviz/");
     strcat_s(filename_png, LINE_LEN, time_str);
-    strcat_s(filename_png, LINE_LEN, ".png");
+    strcat_s(filename_png, LINE_LEN, ".svg");
 
     mkdir("Graphviz");
     // построение описание графа для graphviz
     fopen_s(&file_gv, filename_gv, "w");
     fprintf(file_gv, "digraph G {\n");
-    fprintf(file_gv, "node [shape=box, style=filled, fillcolor=lightblue, fontname=\"Arial\"];\n");
-    fprintf(file_gv, "edge [color=black, fontname=\"Arial\", fontsize=10];\n");
+    fprintf(file_gv, "rankdir = \"LR\"\n");
+    fprintf(file_gv, "node [shape=Mrecord, style=filled, fillcolor = \"#77C3D9\", fontname=\"Arial\", fontsize=10];\n");
+    fprintf(file_gv, "edge [color = \"#A6340D\", weight = 2];\n");
 
+    char color[LINE_LEN] = {};
+    // узлы массива
+    for (size_t i = 0; i < lst->capacity; i++) {
+        if ((i == lst->buffer[0].next_mass) && (i != 0)) {
+            strcpy_s(color, "#77E0AE");
+            fprintf(file_gv, "{rank = same;\n");
+            fprintf(file_gv, "  node_head [shape = \"invhouse\", label = \"HEAD\", fillcolor=\"%s\"];\n", 
+                color);
+            fprintf(file_gv, "  node%zu [label = \"Index = %zu | Value = %d | {Prev = %zu | Next = %zu}\", fillcolor=\"%s\"];\n",
+                i, 
+                i, 
+                lst->buffer[i].value, 
+                lst->buffer[i].prev_mass,
+                lst->buffer[i].next_mass,
+                color);
+            fprintf(file_gv, "}\n");
+        } else if ((i == lst->buffer[0].prev_mass) && (i != 0)) {
+            strcpy_s(color, "#FFC488");
+            fprintf(file_gv, "{rank = same;\n");
+            fprintf(file_gv, "  node_tail [shape = \"invhouse\", label = \"TAIL\", fillcolor=\"%s\"];\n", 
+                color);
+            fprintf(file_gv, "  node%zu [label = \"Index = %zu | Value = %d | {Prev = %zu | Next = %zu}\", fillcolor=\"%s\"];\n",
+                i, 
+                i, 
+                lst->buffer[i].value, 
+                lst->buffer[i].prev_mass,
+                lst->buffer[i].next_mass,
+                color);
+            fprintf(file_gv, "}\n");
+        } else if (i == lst->ind_mass_free) {
+            strcpy_s(color, "#FFA688");
+            fprintf(file_gv, "{rank = same;\n");
+            fprintf(file_gv, "  node_firstfree [shape = \"invhouse\", label = \"FIRST FREE\", fillcolor=\"%s\"];\n", 
+                color);
+            fprintf(file_gv, "  node%zu [label = \"Index = %zu | Value = %d | {Prev = %zu | Next = %zu}\", fillcolor=\"%s\"];\n",
+                i, 
+                i, 
+                lst->buffer[i].value, 
+                lst->buffer[i].prev_mass,
+                lst->buffer[i].next_mass,
+                color);
+            fprintf(file_gv, "}\n");
+        } else {
+            if (i == 0) strcpy_s(color, "#A8A8A8");
+            else if (lst->buffer[i].value == poison_node.value) strcpy_s(color, "#D7D7D7");
+            else strcpy_s(color, "#77C3D9");
+            fprintf(file_gv, "node%zu [label = \"Index = %zu | Value = %d | {Prev = %zu | Next = %zu}\", fillcolor=\"%s\"];\n",
+                i, 
+                i, 
+                lst->buffer[i].value, 
+                lst->buffer[i].prev_mass,
+                lst->buffer[i].next_mass,
+                color);
+        }
+    }
+
+    // связи списка
     size_t ind_lst_temp = 0;
     size_t ind_mass_temp = 0;
+    size_t ind_prev;
+    int weight;
     while (ind_lst_temp < (*lst).num_elems) {
-        if (ind_lst_temp == 0) fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
-                                        ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "green");
-        else {
-            if (ind_mass_temp > lst->capacity) {
-                fprintf(file_gv, "}\n");
-                fclose(file_gv);
-                // преобразование описания графа в картинку
-                sprintf(cmd, "dot -Tpng %s -o %s", filename_gv, filename_png);
-                system(cmd);
-                RETURN_ERROR(LIST_MESS_ERROR_LEN);
-            }
-
-            fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
-                                        ind_lst_temp, (*lst).buffer[ind_mass_temp].value, ind_mass_temp, "gray");
-            fprintf(file_gv, "node%zu -> node%zu;\n", ind_lst_temp - 1, ind_lst_temp);
-        }
+        if ((*lst).buffer[ind_mass_temp].next_mass == 0) weight = 1;
+        else weight = 2;
+        fprintf(file_gv, "node%zu -> node%zu [weight = %d, dir = \"both\"];\n", 
+            ind_mass_temp, 
+            lst->buffer[ind_mass_temp].next_mass,
+            weight);
+        ind_prev = ind_mass_temp;
         ind_mass_temp = (*lst).buffer[ind_mass_temp].next_mass;
         ind_lst_temp++;
     }
 
-    fprintf(file_gv, "node%zu [label=\"%d [%zu]\", fillcolor=\"%s\"];\n",
-                                        ind_lst_temp, (*lst).buffer[(*lst).ind_mass_free].value, (*lst).ind_mass_free, "red");
-    //fprintf(file_gv, "node%d -> node%d;\n", ind_lst_temp - 1, ind_lst_temp);
+    // связи свободных узлов
+    for (size_t i = lst->ind_mass_free; i < lst->capacity; i++) {
+        if (lst->buffer[i].value == poison_node.value) {
+            if (i == lst->ind_mass_free) {
+                fprintf(file_gv, "node%zu -> node%zu [style = invis];\n",
+                ind_prev, 
+                i);
+                ind_prev = i;
+            } else {
+                fprintf(file_gv, "node%zu -> node%zu;\n", 
+                ind_prev, 
+                i);
+                ind_prev = i;
+            }
+        }
+    }
 
-    fprintf(file_gv, "node%zu -> node%zu;\n", ind_lst_temp - 1, 0);
     fprintf(file_gv, "}\n");
-
     fclose(file_gv);
 
     // преобразование описания графа в картинку
-    sprintf(cmd, "dot -Tpng %s -o %s", filename_gv, filename_png);
+    sprintf(cmd, "dot -Tsvg %s -o %s", filename_gv, filename_png);
     system(cmd);
 
     return LIST_MESS_OK;
